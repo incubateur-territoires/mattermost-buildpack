@@ -57,6 +57,12 @@ fi
 finished
 
 start "Install plugins list from marketplace"
+if [[ ! -d "$MATTERMOST_PATH/plugins" ]]; then
+  mkdir -p "$MATTERMOST_PATH/plugins"
+fi
+if [[ ! -d "$MATTERMOST_PATH/client/plugins" ]]; then
+  mkdir -p "$MATTERMOST_PATH/client/plugins"
+fi
 if [[ ! -d "$MATTERMOST_PATH/postdeploy_plugins" ]]; then
   mkdir -p "$MATTERMOST_PATH/postdeploy_plugins"
 fi
