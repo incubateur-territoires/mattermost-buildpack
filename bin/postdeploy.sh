@@ -7,5 +7,6 @@ plugins_list=$(find /app/mattermost/postdeploy_plugins/. -maxdepth 1 -name '*.ta
 
 for plugin in $(echo "$plugins_list" | tr ',' '\n')
 do
+  echo "postdeploy: Installing plugin $plugin"
   /app/mattermost/bin/mattermost plugin add "$plugin"
 done
