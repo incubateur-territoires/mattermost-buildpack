@@ -3,3 +3,4 @@
 # Always accept the Mattermost buildpack
 echo "Mattermost"
 exit 0
+

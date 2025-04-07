@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-cat << EOF
+cat <<EOF
 ---
 addons:
  - scalingo-postgresql
@@ -9,3 +9,4 @@ config_vars:
 default_process_types:
   web: /app/mattermost/bin/run
 EOF
+

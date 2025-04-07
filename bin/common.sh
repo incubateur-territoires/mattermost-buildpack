@@ -60,8 +60,7 @@ function install_plugin() {
   local location="$1"
   local plugin_url="$2"
   local plugin_package
-  # local plugin_package
-  plugin_package=$(echo "$plugin_url" | rev | cut -d '/' -f 1 | rev )
+  plugin_package=$(echo "$plugin_url" | rev | cut -d '/' -f 1 | rev)
   if [ -f "${CACHE_DIR}/dist/plugins/${plugin_package}" ]; then
     info "$plugin_package is already downloaded in cache"
   else
@@ -96,8 +95,7 @@ function install_github_plugins_list() {
   local plugins_list="$2"
   info "Plugins list to install: ${plugins_list}"
   local plugin_url
-  for plugin_id in $(echo "$plugins_list" | tr ',' '\n')
-  do
+  for plugin_id in $(echo "$plugins_list" | tr ',' '\n'); do
     plugin_url=$(fetch_github_latest_release "$plugin_id")
     info "Plugin id to install: ${plugin_id}"
     if [[ -n $plugin_url ]]; then
@@ -117,8 +115,7 @@ function install_marketplace_plugins_list() {
   http_code=$($CURL -G -o "$TMP_PATH/plugins.json" -w '%{http_code}' -H "Accept: application/json" "https://api.integrations.mattermost.com/api/v1/plugins?platform=linux-amd64&server_version=$server_version")
   local plugin_url
   if [[ $http_code == 200 ]]; then
-    for plugin_id in $(echo "$plugins_list" | tr ',' '\n')
-    do
+    for plugin_id in $(echo "$plugins_list" | tr ',' '\n'); do
       info "Plugin id to install: ${plugin_id}"
       plugin_url=$(cat "$TMP_PATH/plugins.json" | jq --arg id "$plugin_id" '.[] | select(.manifest.id == $id) | .download_url')
       plugin_url="${plugin_url%\"}"
@@ -170,7 +167,7 @@ function fetch_mattermost_dist() {
   local edition="$3"
   local dist="mattermost"
   if [[ $edition == "team" ]]; then
-    dist="${dist}-${edition}"  
+    dist="${dist}-${edition}"
   fi
   dist="${dist}-${version}-linux-amd64.tar.gz"
   local dist_url="https://releases.mattermost.com/${version}/${dist}"
