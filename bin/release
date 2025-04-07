@@ -8,5 +8,4 @@ config_vars:
   PATH: "/app/bin:/app/mattermost/bin:/usr/local/bin:/usr/bin:/bin"
 default_process_types:
   web: /app/mattermost/bin/run
-  postdeploy: /app/mattermost/bin/postdeploy
 EOF

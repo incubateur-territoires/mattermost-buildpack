@@ -56,17 +56,16 @@ else
 fi
 finished
 
+mkdir -p "$BUILD_DIR/plugins" "$MATTERMOST_PATH/client/plugins"
+
 start "Install plugins list from marketplace"
-if [[ ! -d "$MATTERMOST_PATH/postdeploy_plugins" ]]; then
-  mkdir -p "$MATTERMOST_PATH/postdeploy_plugins"
-fi
 if [[ -f "${ENV_DIR}/MATTERMOST_MARKETPLACE_PLUGINS" ]]; then
   MATTERMOST_MARKETPLACE_PLUGINS=$(cat "$ENV_DIR/MATTERMOST_MARKETPLACE_PLUGINS")
 else
   MATTERMOST_MARKETPLACE_PLUGINS=""
 fi
-if [[ -n $MATTERMOST_MARKETPLACE_PLUGINS ]]; then  
-  install_marketplace_plugins_list "$BUILD_DIR/mattermost/postdeploy_plugins" "${MATTERMOST_VERSION}" "${MATTERMOST_MARKETPLACE_PLUGINS}"
+if [[ -n $MATTERMOST_MARKETPLACE_PLUGINS ]]; then
+  install_marketplace_plugins_list "$BUILD_DIR/plugins" "${MATTERMOST_VERSION}" "${MATTERMOST_MARKETPLACE_PLUGINS}"
 else
   info "No plugins from marketplace to install"
 fi
@@ -78,11 +77,28 @@ if [[ -f "${ENV_DIR}/MATTERMOST_GITHUB_PLUGINS" ]]; then
 else
   MATTERMOST_GITHUB_PLUGINS=""
 fi
-if [[ -n $MATTERMOST_GITHUB_PLUGINS ]]; then  
-  install_github_plugins_list "$BUILD_DIR/mattermost/postdeploy_plugins" "${MATTERMOST_GITHUB_PLUGINS}"
+if [[ -n $MATTERMOST_GITHUB_PLUGINS ]]; then
+  install_github_plugins_list "$BUILD_DIR/plugins" "${MATTERMOST_GITHUB_PLUGINS}"
 else
   info "No plugins from Github to install"
 fi
+finished
+
+start "Install prepackaged plugins"
+if [[ -f "${ENV_DIR}/MATTERMOST_PREPACKAGED_PLUGINS" ]]; then
+  MATTERMOST_PREPACKAGED_PLUGINS=$(cat "$ENV_DIR/MATTERMOST_PREPACKAGED_PLUGINS")
+else
+  MATTERMOST_PREPACKAGED_PLUGINS=""
+fi
+if [[ -n $MATTERMOST_PREPACKAGED_PLUGINS ]]; then
+  install_prepackaged_plugins_list "$BUILD_DIR/plugins" "${MATTERMOST_PREPACKAGED_PLUGINS}" "$MATTERMOST_PATH"
+else
+  info "No prepackaged plugins to install"
+fi
+finished
+
+start "Fixing plugin IDs"
+fix_plugin_ids "$BUILD_DIR/plugins"
 finished
 
 if [[ -z "${MATTERMOST_EDITION}" ]]; then
@@ -97,11 +113,6 @@ finished
 start "Building run"
 cp "${buildpack}/run.sh" "${MATTERMOST_PATH}/bin/run"
 chmod +x "${MATTERMOST_PATH}/bin/run"
-finished
-
-start "Building postdeploy"
-cp "${buildpack}/postdeploy.sh" "${MATTERMOST_PATH}/bin/postdeploy"
-chmod +x "${MATTERMOST_PATH}/bin/postdeploy"
 finished
 
 step "Cleaning up tmp files"

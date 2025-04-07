@@ -67,8 +67,15 @@ function install_plugin() {
   else
     ${CURL} -o "${CACHE_DIR}/dist/plugins/$plugin_package" "$plugin_url"
   fi
-  mv "${CACHE_DIR}/dist/plugins/${plugin_package}" "$location"
+  unpack_plugin "$location" "${CACHE_DIR}/dist/plugins/${plugin_package}"
   info "Plugin $plugin_package installed in $location"
+}
+
+function unpack_plugin() {
+  local location="$1"
+  local plugin_file="$2"
+
+  tar xvf "$plugin_file" --directory "$location"
 }
 
 function fetch_github_latest_release() {
@@ -125,6 +132,36 @@ function install_marketplace_plugins_list() {
   else
     warn "No plugins list found in marketplace"
   fi
+}
+
+function install_prepackaged_plugins_list() {
+  local location="$1"
+  local plugins_list="$2"
+  local mattermost_path="$3"
+  info "Plugins list to install: ${plugins_list}"
+  local plugin_package
+  for plugin_id in $(echo "$plugins_list" | tr ',' '\n'); do
+    plugin_package="$(ls "$mattermost_path/prepackaged_plugins/mattermost-plugin-$plugin_id"*".tar.gz")"
+    info "Plugin id to install: ${plugin_id}"
+    if [[ -n $plugin_package ]]; then
+      unpack_plugin "$location" "$plugin_package"
+    else
+      warn "No plugin with id $plugin_id found in prepackaged plugins"
+    fi
+  done
+}
+
+function fix_plugin_ids() {
+  local location="$1"
+  for plugin_config in $(find "$location" -name "plugin.json"); do
+    plugin_id="$(cat "$plugin_config" | jq -r '.id')"
+    old_plugin_dir="$(dirname "$plugin_config")"
+    new_plugin_dir="$location/$plugin_id"
+    if [ "$old_plugin_dir" != "$new_plugin_dir" ]; then
+      info "$old_plugin_dir moved to $new_plugin_dir"
+      mv "$old_plugin_dir" "$new_plugin_dir"
+    fi
+  done
 }
 
 function fetch_mattermost_dist() {

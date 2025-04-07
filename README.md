@@ -50,6 +50,8 @@ You can list plugins to install at build:
 MATTERMOST_MARKETPLACE_PLUGINS=com.github.matterpoll.matterpoll,memes
 ## From Github set owner/repo
 MATTERMOST_GITHUB_PLUGINS=blindsidenetworks/mattermost-plugin-bigbluebutton,scottleedavis/mattermost-plugin-remind
+## From prepackaged plugin name
+MATTERMOST_PREPACKAGED_PLUGINS=boards,playbooks-v1
 ```
 
 ## Hacking
