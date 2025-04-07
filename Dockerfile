@@ -1,12 +1,15 @@
-FROM scalingo/scalingo-18
+FROM scalingo/scalingo-22
 
-ADD . buildpack
+WORKDIR /build
+RUN mkdir /env /tmp/cache
 
-ADD .env /env/.env
-RUN buildpack/bin/env.sh /env/.env /env
-RUN buildpack/bin/compile /build /cache /env
-RUN rm -rf /app/mattermost
-RUN cp -rf /build/mattermost /app/mattermost
+COPY . .
+
+RUN bin/env.sh .env /env
+RUN bin/compile /build /tmp/cache /env
+RUN rm -rf /app && mv /build /app 
+
+WORKDIR /app
 
 EXPOSE ${PORT}
 
