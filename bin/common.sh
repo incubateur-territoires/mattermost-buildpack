@@ -39,19 +39,34 @@ function indent() {
   esac
 }
 
+function detect_arch() {
+  case "$(uname -m)" in
+  x86_64 | amd64) echo "amd64" ;;
+  aarch64 | arm64) echo "arm64" ;;
+  *)
+    err "Unsupported architecture: $(uname -m)"
+    return 1
+    ;;
+  esac
+}
+
 function install_jq() {
+  if command -v jq >/dev/null 2>&1; then
+    info "jq already available: $(jq --version)"
+    return 0
+  fi
   if [[ -f "${ENV_DIR}/JQ_VERSION" ]]; then
     JQ_VERSION=$(cat "${ENV_DIR}/JQ_VERSION")
   else
-    JQ_VERSION=1.6
+    JQ_VERSION=1.7.1
   fi
   step "Fetching jq $JQ_VERSION"
-  if [ -f "${CACHE_DIR}/dist/jq-$JQ_VERSION" ]; then
+  if [ -f "${CACHE_DIR}/dist/jq-$JQ_VERSION-$ARCH" ]; then
     info "File already downloaded"
   else
-    ${CURL} -o "${CACHE_DIR}/dist/jq-$JQ_VERSION" "https://github.com/stedolan/jq/releases/download/jq-$JQ_VERSION/jq-linux64"
+    ${CURL} -o "${CACHE_DIR}/dist/jq-$JQ_VERSION-$ARCH" "https://github.com/jqlang/jq/releases/download/jq-$JQ_VERSION/jq-linux-$ARCH"
   fi
-  cp "${CACHE_DIR}/dist/jq-$JQ_VERSION" "${BUILD_DIR}/bin/jq"
+  cp "${CACHE_DIR}/dist/jq-$JQ_VERSION-$ARCH" "${BUILD_DIR}/bin/jq"
   chmod +x "${BUILD_DIR}/bin/jq"
   finished
 }
@@ -77,17 +92,24 @@ function unpack_plugin() {
   tar xvf "$plugin_file" --directory "$location"
 }
 
-function fetch_github_latest_release() {
-  local repo="$1"
-  local http_code
-  http_code=$($CURL -G -o "$TMP_PATH/latest_release.json" -w '%{http_code}' -H "Accept: application/vnd.github.v3+json" "https://api.github.com/repos/${repo}/releases/latest")
-  local plugin_url
-  if [[ $http_code == 200 ]]; then
-    plugin_url=$(cat "$TMP_PATH/latest_release.json" | jq 'if (.assets | length < 2) then .assets[0].browser_download_url else .assets[] | select(.name|test("linux[_-]amd64.*\\.tar\\.gz$";"ix")) | .browser_download_url end' | xargs)
-    plugin_url="${plugin_url%\"}"
-    plugin_url="${plugin_url#\"}"
+# usage: fetch_github_release owner/repo[@tag]
+# Prints the plugin tarball url of the given release (latest by default).
+# Prefers the linux-$ARCH build, falls back to a multi-platform tarball, skips FIPS builds.
+function fetch_github_release() {
+  local repo="${1%%@*}"
+  local release="latest"
+  if [[ "$1" == *@* ]]; then
+    release="tags/${1#*@}"
   fi
-  echo "$plugin_url"
+  local http_code
+  http_code=$($CURL -G -o "$TMP_PATH/release.json" -w '%{http_code}' -H "Accept: application/vnd.github.v3+json" "https://api.github.com/repos/${repo}/releases/${release}")
+  if [[ $http_code == 200 ]]; then
+    jq -r --arg arch "$ARCH" '
+      [.assets[] | select(.name | test("\\.tar\\.gz$")) | select(.name | test("fips"; "i") | not)] as $assets
+      | [($assets[] | select(.name | test("linux[_-]" + $arch; "i"))),
+         ($assets[] | select(.name | test("(linux|darwin|windows)[_-]"; "i") | not))]
+      | first | .browser_download_url // empty' "$TMP_PATH/release.json"
+  fi
 }
 
 function install_github_plugins_list() {
@@ -96,12 +118,12 @@ function install_github_plugins_list() {
   info "Plugins list to install: ${plugins_list}"
   local plugin_url
   for plugin_id in $(echo "$plugins_list" | tr ',' '\n'); do
-    plugin_url=$(fetch_github_latest_release "$plugin_id")
+    plugin_url=$(fetch_github_release "$plugin_id")
     info "Plugin id to install: ${plugin_id}"
     if [[ -n $plugin_url ]]; then
       install_plugin "$location" "$plugin_url"
     else
-      warn "No plugin with id $plugin_id found in Github"
+      warn "No plugin release found in Github for $plugin_id"
     fi
   done
 }
@@ -112,7 +134,7 @@ function install_marketplace_plugins_list() {
   local plugins_list="$3"
   info "Plugins list to install: ${plugins_list}"
   local http_code
-  http_code=$($CURL -G -o "$TMP_PATH/plugins.json" -w '%{http_code}' -H "Accept: application/json" "https://api.integrations.mattermost.com/api/v1/plugins?platform=linux-amd64&server_version=$server_version")
+  http_code=$($CURL -G -o "$TMP_PATH/plugins.json" -w '%{http_code}' -H "Accept: application/json" "https://api.integrations.mattermost.com/api/v1/plugins?platform=linux-$ARCH&server_version=$server_version")
   local plugin_url
   if [[ $http_code == 200 ]]; then
     for plugin_id in $(echo "$plugins_list" | tr ',' '\n'); do
@@ -131,23 +153,6 @@ function install_marketplace_plugins_list() {
   fi
 }
 
-function install_prepackaged_plugins_list() {
-  local location="$1"
-  local plugins_list="$2"
-  local mattermost_path="$3"
-  info "Plugins list to install: ${plugins_list}"
-  local plugin_package
-  for plugin_id in $(echo "$plugins_list" | tr ',' '\n'); do
-    plugin_package="$(ls "$mattermost_path/prepackaged_plugins/mattermost-plugin-$plugin_id"*".tar.gz")"
-    info "Plugin id to install: ${plugin_id}"
-    if [[ -n $plugin_package ]]; then
-      unpack_plugin "$location" "$plugin_package"
-    else
-      warn "No plugin with id $plugin_id found in prepackaged plugins"
-    fi
-  done
-}
-
 function fix_plugin_ids() {
   local location="$1"
   for plugin_config in $(find "$location" -name "plugin.json"); do
@@ -161,20 +166,39 @@ function fix_plugin_ids() {
   done
 }
 
+# Mattermost team tarball: provides client, i18n, templates, fonts and mmctl.
+# Its server binary is replaced by mostlymatter.
 function fetch_mattermost_dist() {
   local version="$1"
   local location="$2"
-  local edition="$3"
-  local dist="mattermost"
-  if [[ $edition == "team" ]]; then
-    dist="${dist}-${edition}"
-  fi
-  dist="${dist}-${version}-linux-amd64.tar.gz"
+  local dist="mattermost-team-${version}-linux-${ARCH}.tar.gz"
   local dist_url="https://releases.mattermost.com/${version}/${dist}"
   if [ -f "${CACHE_DIR}/dist/${dist}" ]; then
     info "File is already downloaded"
   else
-    ${CURL} -o "${CACHE_DIR}/dist/${dist}" "${dist_url}"
+    ${CURL} --fail -o "${CACHE_DIR}/dist/${dist}" "${dist_url}"
   fi
   tar xzf "$CACHE_DIR/dist/${dist}" -C "$location"
+}
+
+# Mostlymatter server binary built by Framasoft: https://framagit.org/framasoft/framateam/mostlymatter
+function fetch_mostlymatter() {
+  local version="$1"
+  local destination="$2"
+  local binary="mostlymatter-${ARCH}-v${version}"
+  local base_url="https://packages.framasoft.org/projects/mostlymatter"
+  if [ -f "${CACHE_DIR}/dist/${binary}" ]; then
+    info "File is already downloaded"
+  else
+    ${CURL} --fail -o "${CACHE_DIR}/dist/${binary}.sha512" "${base_url}/${binary}.sha512"
+    ${CURL} --fail -o "${CACHE_DIR}/dist/${binary}" "${base_url}/${binary}"
+  fi
+  if ! (cd "${CACHE_DIR}/dist" && sha512sum --check --status "${binary}.sha512"); then
+    rm -f "${CACHE_DIR}/dist/${binary}" "${CACHE_DIR}/dist/${binary}.sha512"
+    err "Checksum mismatch for ${binary}"
+    return 1
+  fi
+  info "Checksum verified for ${binary}"
+  cp "${CACHE_DIR}/dist/${binary}" "$destination"
+  chmod +x "$destination"
 }

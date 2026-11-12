@@ -4,4 +4,4 @@
 export MM_PLUGINSETTINGS_CLIENTDIRECTORY="/app/mattermost/client/plugins"
 export MM_SERVICESETTINGS_LISTENADDRESS=":${PORT}"
 
-/app/mattermost/bin/mattermost
+exec /app/mattermost/bin/mostlymatter
