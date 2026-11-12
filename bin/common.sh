@@ -75,7 +75,7 @@ function install_plugin() {
   local location="$1"
   local plugin_url="$2"
   local plugin_package
-  plugin_package=$(echo "$plugin_url" | rev | cut -d '/' -f 1 | rev)
+  plugin_package="${plugin_url##*/}"
   if [ -f "${CACHE_DIR}/dist/plugins/${plugin_package}" ]; then
     info "$plugin_package is already downloaded in cache"
   else
