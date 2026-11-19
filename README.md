@@ -24,14 +24,15 @@ And other environment variables are set by example in a `.env.sample` file.
 
 `PORT` and `SCALINGO_POSTGRESQL_URL` are provided by Scalingo.
 
-Addon configuration by default:
+Addon configuration by default (set by `bin/run`, any app env var takes precedence):
 
 ```shell
 MM_SQLSETTINGS_DRIVERNAME=postgres # if required replace by mysql
 MM_SQLSETTINGS_DATASOURCE=$SCALINGO_POSTGRESQL_URL # SCALINGO_POSTGRESQL_URL is provided by scalingo at app boot step
+MM_CONFIG=$MM_SQLSETTINGS_DATASOURCE # config persisted in database
 ```
 
-Warning ⚠️: you should copy the database url in `MM_SQLSETTINGS_DATASOURCE` and change `sslmode` if `prefer` is unknown by mattermost.
+Warning ⚠️: if `sslmode=prefer` is refused by Mattermost, set `MM_SQLSETTINGS_DATASOURCE` and `MM_CONFIG` explicitly with another `sslmode`.
 
 Version installed (default `12.1.0`). It must be published both by [Framasoft](https://packages.framasoft.org/projects/mostlymatter/) and by Mattermost:
 
@@ -55,12 +56,14 @@ You can list plugins to install at build:
 ## From marketplace set ids
 MATTERMOST_MARKETPLACE_PLUGINS=com.github.matterpoll.matterpoll,memes
 ## From Github set owner/repo (latest release) or owner/repo@tag (pinned release)
-MATTERMOST_GITHUB_PLUGINS=mattermost/mattermost-plugin-boards@v10.1.0,mattermost-community/mattermost-plugin-welcomebot
+MATTERMOST_GITHUB_PLUGINS=wbernest/mattermost-plugin-rssfeed@0.2.5,mattermost-community/mattermost-plugin-welcomebot
 ```
 
 For Github releases, the `linux-<arch>` tarball is preferred, then a multi-platform tarball; FIPS builds are skipped.
 
-`MATTERMOST_PREPACKAGED_PLUGINS` is no longer supported: recent `mattermost-team` tarballs do not ship prepackaged plugins. Use `MATTERMOST_GITHUB_PLUGINS` instead, e.g. `mattermost/mattermost-plugin-boards` for Boards.
+Plugins are not extracted at build: their tarballs are added to `mattermost/prepackaged_plugins`, next to the ones shipped by Mattermost (Boards, GitLab, Calls, Playbooks…). At boot, Mattermost installs every prepackaged plugin enabled in the plugin settings (`MM_PLUGINSETTINGS_AUTOMATICPREPACKAGEDPLUGINS` defaults to `true` in `bin/run`). Since Mattermost 12, plugins extracted directly in the plugins directory are removed at boot by the file store sync.
+
+`MATTERMOST_PREPACKAGED_PLUGINS` is no longer needed: enable a shipped plugin from the System Console.
 
 ## Hacking
 

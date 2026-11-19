@@ -46,7 +46,8 @@ fetch_mostlymatter "${MATTERMOST_VERSION}" "${MATTERMOST_PATH}/bin/mostlymatter"
 ln -sf mostlymatter "${MATTERMOST_PATH}/bin/mattermost"
 finished
 
-mkdir -p "$BUILD_DIR/plugins" "$MATTERMOST_PATH/client/plugins"
+PREPACKAGED_PLUGINS_PATH="$MATTERMOST_PATH/prepackaged_plugins"
+mkdir -p "$BUILD_DIR/plugins" "$MATTERMOST_PATH/client/plugins" "$PREPACKAGED_PLUGINS_PATH"
 
 start "Apply buildpack config"
 BUILDPACK_CONFIG="${buildpack}/../config.json"
@@ -67,7 +68,7 @@ else
   MATTERMOST_MARKETPLACE_PLUGINS=""
 fi
 if [[ -n $MATTERMOST_MARKETPLACE_PLUGINS ]]; then
-  install_marketplace_plugins_list "$BUILD_DIR/plugins" "${MATTERMOST_VERSION}" "${MATTERMOST_MARKETPLACE_PLUGINS}"
+  install_marketplace_plugins_list "$PREPACKAGED_PLUGINS_PATH" "${MATTERMOST_VERSION}" "${MATTERMOST_MARKETPLACE_PLUGINS}"
 else
   info "No plugins from marketplace to install"
 fi
@@ -80,19 +81,15 @@ else
   MATTERMOST_GITHUB_PLUGINS=""
 fi
 if [[ -n $MATTERMOST_GITHUB_PLUGINS ]]; then
-  install_github_plugins_list "$BUILD_DIR/plugins" "${MATTERMOST_GITHUB_PLUGINS}"
+  install_github_plugins_list "$PREPACKAGED_PLUGINS_PATH" "${MATTERMOST_GITHUB_PLUGINS}"
 else
   info "No plugins from Github to install"
 fi
 finished
 
 if [[ -f "${ENV_DIR}/MATTERMOST_PREPACKAGED_PLUGINS" ]]; then
-  warn "MATTERMOST_PREPACKAGED_PLUGINS is ignored: Mattermost team dist no longer ships prepackaged plugins, use MATTERMOST_GITHUB_PLUGINS instead (e.g. mattermost/mattermost-plugin-boards for boards)"
+  warn "MATTERMOST_PREPACKAGED_PLUGINS is ignored: prepackaged plugins are installed at boot when enabled in plugin settings"
 fi
-
-start "Fixing plugin IDs"
-fix_plugin_ids "$BUILD_DIR/plugins"
-finished
 
 info "Using mostlymatter version: ${MATTERMOST_VERSION}" | indent
 

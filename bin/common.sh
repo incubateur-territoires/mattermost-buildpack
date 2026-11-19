@@ -71,6 +71,9 @@ function install_jq() {
   finished
 }
 
+# Plugin tarballs are dropped into prepackaged_plugins: Mattermost installs them at boot
+# (with AutomaticPrepackagedPlugins), whereas plugins extracted in the plugins directory
+# are removed by the file store sync since Mattermost 12.
 function install_plugin() {
   local location="$1"
   local plugin_url="$2"
@@ -79,17 +82,10 @@ function install_plugin() {
   if [ -f "${CACHE_DIR}/dist/plugins/${plugin_package}" ]; then
     info "$plugin_package is already downloaded in cache"
   else
-    ${CURL} -o "${CACHE_DIR}/dist/plugins/$plugin_package" "$plugin_url"
+    ${CURL} --fail -o "${CACHE_DIR}/dist/plugins/$plugin_package" "$plugin_url"
   fi
-  unpack_plugin "$location" "${CACHE_DIR}/dist/plugins/${plugin_package}"
-  info "Plugin $plugin_package installed in $location"
-}
-
-function unpack_plugin() {
-  local location="$1"
-  local plugin_file="$2"
-
-  tar xvf "$plugin_file" --directory "$location"
+  cp "${CACHE_DIR}/dist/plugins/${plugin_package}" "$location/"
+  info "Plugin $plugin_package added to $location"
 }
 
 # usage: fetch_github_release owner/repo[@tag]
@@ -151,19 +147,6 @@ function install_marketplace_plugins_list() {
   else
     warn "No plugins list found in marketplace"
   fi
-}
-
-function fix_plugin_ids() {
-  local location="$1"
-  for plugin_config in $(find "$location" -name "plugin.json"); do
-    plugin_id="$(cat "$plugin_config" | jq -r '.id')"
-    old_plugin_dir="$(dirname "$plugin_config")"
-    new_plugin_dir="$location/$plugin_id"
-    if [ "$old_plugin_dir" != "$new_plugin_dir" ]; then
-      info "$old_plugin_dir moved to $new_plugin_dir"
-      mv "$old_plugin_dir" "$new_plugin_dir"
-    fi
-  done
 }
 
 # Mattermost team tarball: provides client, i18n, templates, fonts and mmctl.
