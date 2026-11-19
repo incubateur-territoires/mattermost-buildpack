@@ -1,6 +1,11 @@
 # mattermost-buildpack
 
-> This buildpack aims at installing a [Mattermost](https://mattermost.com) instance on [Scalingo](https://www.scalingo.com) and let you configure it at your convenance.
+> This buildpack aims at installing a [Mostlymatter](https://framagit.org/framasoft/framateam/mostlymatter) instance on [Scalingo](https://www.scalingo.com) and let you configure it at your convenance.
+
+Mostlymatter is a fork of the Mattermost open source edition maintained by Framasoft, without the user and message limits. The buildpack downloads:
+
+- the `mattermost-team` release tarball from `releases.mattermost.com` (web client, i18n, templates, `mmctl`);
+- the matching `mostlymatter` binary from `packages.framasoft.org` (checksum verified), which replaces the Mattermost server binary (`bin/mattermost` is a symlink to `bin/mostlymatter`).
 
 ## Usage
 
@@ -19,21 +24,23 @@ And other environment variables are set by example in a `.env.sample` file.
 
 `PORT` and `SCALINGO_POSTGRESQL_URL` are provided by Scalingo.
 
-Addon configuration by default:
+Addon configuration by default (set by `bin/run`, any app env var takes precedence):
 
 ```shell
 MM_SQLSETTINGS_DRIVERNAME=postgres # if required replace by mysql
 MM_SQLSETTINGS_DATASOURCE=$SCALINGO_POSTGRESQL_URL # SCALINGO_POSTGRESQL_URL is provided by scalingo at app boot step
+MM_CONFIG=$MM_SQLSETTINGS_DATASOURCE # config persisted in database
 ```
 
-Warning ⚠️: you should copy the database url in `MM_SQLSETTINGS_DATASOURCE` and change `sslmode` if `prefer` is unknown by mattermost.
+Warning ⚠️: if `sslmode=prefer` is refused by Mattermost, set `MM_SQLSETTINGS_DATASOURCE` and `MM_CONFIG` explicitly with another `sslmode`.
 
-By default the buildpack install the latest release enterprise edition:
+Version installed (default `12.1.0`). It must be published both by [Framasoft](https://packages.framasoft.org/projects/mostlymatter/) and by Mattermost:
 
 ```shell
-MATTERMOST_EDITION= # enterprise by default, set team if you prefer
-MATTERMOST_VERSION=latest # latest release by default, you can change with specific version
+MATTERMOST_VERSION=12.1.0
 ```
+
+`MATTERMOST_EDITION` is no longer used: mostlymatter is built from the open source edition.
 
 All other environment variables are specific to mattermost, see [documentation](https://docs.mattermost.com/administration/config-settings.html#environment-variables).
 
@@ -48,11 +55,15 @@ You can list plugins to install at build:
 ```shell
 ## From marketplace set ids
 MATTERMOST_MARKETPLACE_PLUGINS=com.github.matterpoll.matterpoll,memes
-## From Github set owner/repo
-MATTERMOST_GITHUB_PLUGINS=blindsidenetworks/mattermost-plugin-bigbluebutton,scottleedavis/mattermost-plugin-remind
-## From prepackaged plugin name
-MATTERMOST_PREPACKAGED_PLUGINS=boards,playbooks-v1
+## From Github set owner/repo (latest release) or owner/repo@tag (pinned release)
+MATTERMOST_GITHUB_PLUGINS=wbernest/mattermost-plugin-rssfeed@0.2.5,mattermost-community/mattermost-plugin-welcomebot
 ```
+
+For Github releases, the `linux-<arch>` tarball is preferred, then a multi-platform tarball; FIPS builds are skipped.
+
+Plugins are not extracted at build: their tarballs are added to `mattermost/prepackaged_plugins`, next to the ones shipped by Mattermost (Boards, GitLab, Calls, Playbooks…). At boot, Mattermost installs every prepackaged plugin enabled in the plugin settings (`MM_PLUGINSETTINGS_AUTOMATICPREPACKAGEDPLUGINS` defaults to `true` in `bin/run`). Since Mattermost 12, plugins extracted directly in the plugins directory are removed at boot by the file store sync.
+
+`MATTERMOST_PREPACKAGED_PLUGINS` is no longer needed: enable a shipped plugin from the System Console.
 
 ## Hacking
 
@@ -65,7 +76,7 @@ cp .env.sample .env
 Run an interactive docker scalingo stack:
 
 ```shell
-docker run --name mattermost -it -p 8065:8065 -v "$(pwd)"/.env:/env/.env -v "$(pwd)":/buildpack scalingo/scalingo-18:latest bash
+docker run --name mattermost -it -p 8065:8065 -v "$(pwd)"/.env:/env/.env -v "$(pwd)":/buildpack scalingo/scalingo-22:latest bash
 ```
 
 And test in it:
@@ -81,7 +92,7 @@ Run Mattermost server:
 
 ```shell
 export PATH=$PATH:/build/mattermost/bin
-mattermost server
+mostlymatter server
 ```
 
 You can also use docker-compose in order to test with a complete stack (db, s3, smtp):

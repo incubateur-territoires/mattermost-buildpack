@@ -19,44 +19,47 @@ TMP_PATH="$BUILD_DIR/tmp"
 mkdir -p "${BUILD_DIR}/bin" "${CACHE_DIR}/dist" "${CACHE_DIR}/dist/plugins" "${TMP_PATH}"
 export PATH="$BUILD_DIR/bin:$PATH"
 
-STACK="${STACK:-scalingo-18}"
+ARCH="$(detect_arch)"
 
-start "Install Mattermost"
+# jq is required by config merge and plugins installation
+install_jq
 
 if [[ -f "$ENV_DIR/MATTERMOST_VERSION" ]]; then
   MATTERMOST_VERSION=$(cat "$ENV_DIR/MATTERMOST_VERSION")
 else
-  MATTERMOST_VERSION="5.34.2"
+  MATTERMOST_VERSION="12.1.0"
 fi
 
 if [[ -f "${ENV_DIR}/MATTERMOST_EDITION" ]]; then
-  MATTERMOST_EDITION=$(cat "$ENV_DIR/MATTERMOST_EDITION")
-else
-  MATTERMOST_EDITION="" # default is enterprise (empty) and otherwise team
+  warn "MATTERMOST_EDITION is ignored: mostlymatter is built from the open source edition"
 fi
 
-start "Fetch Mattermost ${MATTERMOST_VERSION} ${MATTERMOST_EDITION} dist"
-
-if [ ! -d "${MATTERMOST_PATH}" ]; then
-  fetch_mattermost_dist "${MATTERMOST_VERSION}" "${TMP_PATH}" "${MATTERMOST_EDITION}" | indent
-  mv "${TMP_PATH}/mattermost" "${MATTERMOST_PATH}"
-else
-  warn "Mattermost already installed"
-  if [[ -f "${ENV_DIR}/MATTERMOST_MIGRATION" ]]; then
-    MATTERMOST_MIGRATION=$(cat "$ENV_DIR/MATTERMOST_MIGRATION")
-  else
-    MATTERMOST_MIGRATION=0
-  fi
-  if [ $MATTERMOST_MIGRATION == 1 ]; then
-    info "Mattermost migration into ${MATTERMOST_VERSION}"
-    mv "/app/mattermost" "${TMP_PATH}/mattermost-backup"
-    fetch_mattermost_dist "${MATTERMOST_VERSION}" "${TMP_PATH}" | indent
-    mv "${TMP_PATH}/mattermost-${MATTERMOST_VERSION}" "${MATTERMOST_PATH}"
-  fi
-fi
+step "Fetch Mattermost ${MATTERMOST_VERSION} team dist (${ARCH})"
+rm -rf "${MATTERMOST_PATH}"
+fetch_mattermost_dist "${MATTERMOST_VERSION}" "${TMP_PATH}" | indent
+mv "${TMP_PATH}/mattermost" "${MATTERMOST_PATH}"
 finished
 
-mkdir -p "$BUILD_DIR/plugins" "$MATTERMOST_PATH/client/plugins"
+step "Fetch mostlymatter ${MATTERMOST_VERSION} (${ARCH})"
+fetch_mostlymatter "${MATTERMOST_VERSION}" "${MATTERMOST_PATH}/bin/mostlymatter" | indent
+# Replace the upstream server binary so that `mattermost` commands run mostlymatter
+ln -sf mostlymatter "${MATTERMOST_PATH}/bin/mattermost"
+finished
+
+PREPACKAGED_PLUGINS_PATH="$MATTERMOST_PATH/prepackaged_plugins"
+mkdir -p "$BUILD_DIR/plugins" "$MATTERMOST_PATH/client/plugins" "$PREPACKAGED_PLUGINS_PATH"
+
+start "Apply buildpack config"
+BUILDPACK_CONFIG="${buildpack}/../config.json"
+MM_CONFIG_PATH="${MATTERMOST_PATH}/config/config.json"
+if [[ -f "$BUILDPACK_CONFIG" ]] && [[ -f "$MM_CONFIG_PATH" ]]; then
+  jq -s '.[0] * .[1]' "$MM_CONFIG_PATH" "$BUILDPACK_CONFIG" >"${MM_CONFIG_PATH}.tmp"
+  mv "${MM_CONFIG_PATH}.tmp" "$MM_CONFIG_PATH"
+  info "Buildpack config applied from config.json"
+else
+  warn "Skipping config merge (config.json or Mattermost config not found)"
+fi
+finished
 
 start "Install plugins list from marketplace"
 if [[ -f "${ENV_DIR}/MATTERMOST_MARKETPLACE_PLUGINS" ]]; then
@@ -65,7 +68,7 @@ else
   MATTERMOST_MARKETPLACE_PLUGINS=""
 fi
 if [[ -n $MATTERMOST_MARKETPLACE_PLUGINS ]]; then
-  install_marketplace_plugins_list "$BUILD_DIR/plugins" "${MATTERMOST_VERSION}" "${MATTERMOST_MARKETPLACE_PLUGINS}"
+  install_marketplace_plugins_list "$PREPACKAGED_PLUGINS_PATH" "${MATTERMOST_VERSION}" "${MATTERMOST_MARKETPLACE_PLUGINS}"
 else
   info "No plugins from marketplace to install"
 fi
@@ -78,37 +81,17 @@ else
   MATTERMOST_GITHUB_PLUGINS=""
 fi
 if [[ -n $MATTERMOST_GITHUB_PLUGINS ]]; then
-  install_github_plugins_list "$BUILD_DIR/plugins" "${MATTERMOST_GITHUB_PLUGINS}"
+  install_github_plugins_list "$PREPACKAGED_PLUGINS_PATH" "${MATTERMOST_GITHUB_PLUGINS}"
 else
   info "No plugins from Github to install"
 fi
 finished
 
-start "Install prepackaged plugins"
 if [[ -f "${ENV_DIR}/MATTERMOST_PREPACKAGED_PLUGINS" ]]; then
-  MATTERMOST_PREPACKAGED_PLUGINS=$(cat "$ENV_DIR/MATTERMOST_PREPACKAGED_PLUGINS")
-else
-  MATTERMOST_PREPACKAGED_PLUGINS=""
-fi
-if [[ -n $MATTERMOST_PREPACKAGED_PLUGINS ]]; then
-  install_prepackaged_plugins_list "$BUILD_DIR/plugins" "${MATTERMOST_PREPACKAGED_PLUGINS}" "$MATTERMOST_PATH"
-else
-  info "No prepackaged plugins to install"
-fi
-finished
-
-start "Fixing plugin IDs"
-fix_plugin_ids "$BUILD_DIR/plugins"
-finished
-
-if [[ -z "${MATTERMOST_EDITION}" ]]; then
-  MATTERMOST_EDITION_LABEL="enterprise"
-else
-  MATTERMOST_EDITION_LABEL="team" # default is enterprise (empty) and otherwise team
+  warn "MATTERMOST_PREPACKAGED_PLUGINS is ignored: prepackaged plugins are installed at boot when enabled in plugin settings"
 fi
 
-info "Using mattermost version: ${MATTERMOST_VERSION} edition: ${MATTERMOST_EDITION_LABEL}" | indent
-finished
+info "Using mostlymatter version: ${MATTERMOST_VERSION}" | indent
 
 start "Building run"
 cp "${buildpack}/run.sh" "${MATTERMOST_PATH}/bin/run"

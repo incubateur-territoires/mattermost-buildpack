@@ -1,9 +1,9 @@
 {
-  "name": "Mattermost",
-  "description": "Mattermost",
+  "name": "Mostlymatter",
+  "description": "Mostlymatter",
   "logo": "https://about.mattermost.com/wp-content/uploads/2017/08/Mattermost-Logo-Blue.svg",
   "repository": "https://github.com/MTES-MCT/mattermost-scalingo",
-  "website": "https://mattermost.com",
+  "website": "https://framagit.org/framasoft/framateam/mostlymatter",
   "env": {
     "BUILDPACK_URL": {
       "description": "Buildpack used to deploy Mattermost",
@@ -11,18 +11,13 @@
       "required": true
     },
     "JQ_VERSION": {
-      "description": "jq version",
-      "value": "1.6",
+      "description": "jq version (only used if jq is missing on the stack)",
+      "value": "1.7.1",
       "required": false
     },
     "MATTERMOST_VERSION": {
-      "description": "mattermost version",
-      "value": "5.34.2",
-      "required": false
-    },
-    "MATTERMOST_EDITION": {
-      "description": "edition team or enterprise (empty default)",
-      "value": "",
+      "description": "mostlymatter version (must exist on packages.framasoft.org and releases.mattermost.com)",
+      "value": "12.1.0",
       "required": false
     },
     "MATTERMOST_PLUGINS": {
@@ -101,7 +96,9 @@
       "value": "512m"
     }
   },
-  "addons": ["postgresql:postgresql-sandbox"],
+  "addons": [
+    "postgresql:postgresql-sandbox"
+  ],
   "formation": {
     "web": {
       "amount": 1,
